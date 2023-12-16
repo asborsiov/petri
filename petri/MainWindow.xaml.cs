@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -16,6 +16,9 @@ using System.Windows.Media.Media3D;
 using System.Timers;
 using System;
 using static petri.PgViewModel;
+using System.Threading;
+using System.Windows.Threading;
+using System.Runtime.InteropServices;
 
 namespace petri
 {
@@ -28,8 +31,19 @@ namespace petri
         public static int board = 1200; //width and height of the game field
         public static int bytesperpixel = 4;
         public static int stride = board * bytesperpixel; 
-        byte[] imgdata = new byte[board * board * bytesperpixel]; 
-
+        byte[] imgdata = new byte[board * board * bytesperpixel];
+        public static WriteableBitmap currentPgImage = new WriteableBitmap(board, board, 96, 96, PixelFormats.Bgr32, null);
+        public event PropertyChangedEventHandler PropertyChanged;
+        public WriteableBitmap CurrentPgImage
+        {
+            get { return currentPgImage; }
+            set
+            {
+                currentPgImage = value;
+                PropertyChanged?.Invoke(
+                    this, new PropertyChangedEventArgs("CurrentPgImage"));
+            }
+        }
         //Other global variables
 
         //Jagged array is faster than 2d array or a single array for my data size
@@ -84,10 +98,10 @@ namespace petri
             int randomPosX;
             int randomPosY;
 
-            for (var i = 0; i < 5; i++)
+            for (var i = 0; i < 1; i++)
             {
-                randomPosX = random.Next(1, 1000);
-                randomPosY = random.Next(1, 1000);
+                randomPosX = random.Next(500, 501);
+                randomPosY = random.Next(500, 501);
 
                 if ((dots[randomPosX][randomPosY].playerID == 0))
                 {
@@ -110,15 +124,16 @@ namespace petri
             }
 
              try
-            {         
-
-            //Copy the list, because we can't add new Dots while iterating them
-            List <Dot> previousActorsList = new List<Dot>(actorsList);
-
-            foreach (var actor in previousActorsList)
             {
-                //List of possible directions to grow for this Dot
-                List<Dot> decisionList = new List<Dot>();
+
+                //Copy the list, because we can't add new Dots while iterating them
+                //Iterating over list index with count is slower than copying the list altogether
+                List<Dot> previousActorsList = new List<Dot>(actorsList);
+
+                foreach (var actor in previousActorsList)
+                {
+                    //List of possible directions to grow for this Dot
+                    List<Dot> decisionList = new List<Dot>();
 
                 //Looking for 8 neighbors. A sector is a 3x3 box
                 for (int sector_x = actor.x - 1; sector_x != actor.x + 2; sector_x++)
@@ -145,19 +160,23 @@ namespace petri
                 dots[randomTarget.x][randomTarget.y].x = randomTarget.x;
                 dots[randomTarget.x][randomTarget.y].y = randomTarget.y;
                 actorsList.Add(dots[randomTarget.x][randomTarget.y]);
+                imgdata[randomTarget.x * stride + randomTarget.y * 4 + 0] = Convert.ToByte((100));
+                imgdata[randomTarget.x * stride + randomTarget.y * 4 + 1] = Convert.ToByte((100) );
+                imgdata[randomTarget.x * stride + randomTarget.y * 4 + 2] = Convert.ToByte((100) );
+                imgdata[randomTarget.x * stride + randomTarget.y * 4 + 3] = Convert.ToByte((100) );
                 }
-            }
+                }
 
-            for (int row = 0; row < board; row++)
+/*            for (int row = 0; row < board; row++)
             {
                 for (int col = 0; col < board; col++)
                 {
                     if (dots[row][col].playerID == 1)
                     {
-                        imgdata[row * stride  + col * 4 + 0] = Convert.ToByte((0.2) * 0xff);
-                        imgdata[row * stride + col * 4 + 1] = Convert.ToByte((0.2) * 0xff);
-                        imgdata[row * stride + col * 4 + 2] = Convert.ToByte((0.2) * 0xff);
-                        imgdata[row * stride + col * 4 + 3] = Convert.ToByte((0.2) * 0xff);
+                        imgdata[row * stride + col * 4 + 0] = Convert.ToByte((100));
+                        imgdata[row * stride + col * 4 + 1] = Convert.ToByte((100) );
+                        imgdata[row * stride + col * 4 + 2] = Convert.ToByte((100) );
+                        imgdata[row * stride + col * 4 + 3] = Convert.ToByte((100) );
                     }
                     else
                     {
@@ -167,39 +186,27 @@ namespace petri
                         imgdata[row * stride + col * 4 + 3] = Convert.ToByte(0xff);
                     }
                 }
-              }
+              }*/
 
-
-            var gradient = BitmapSource.Create(board, board, 96, 96, PixelFormats.Bgra32, null, imgdata, stride);
-            gradient.Freeze();
-
-            CurrentPgImage = gradient;
+                //var gradient = BitmapSource.Create(board, board, 96, 96, PixelFormats.Bgra32, null, imgdata, stride);
+               
+            App.Current.Dispatcher.BeginInvoke((Action)delegate
+                {
+                    currentPgImage.WritePixels(new Int32Rect(0, 0, board, board), imgdata, stride, 0);
+                });
             }
             finally
             {
                 Monitor.Exit(timerLock);
             }
-        }
+        }    
 
-
-        public event PropertyChangedEventHandler PropertyChanged;
-        private BitmapSource currentPgImage;
-        public BitmapSource CurrentPgImage
-        {
-            get { return currentPgImage; }
-            set
-            {
-                currentPgImage = value;
-                PropertyChanged?.Invoke(
-                    this, new PropertyChangedEventArgs("CurrentPgImage"));
-            }
-        }
 
     }
-
+    //https://stackoverflow.com/questions/16220472/how-to-create-a-bitmapimage-from-a-pixel-byte-array-live-video-display
     public partial class MainWindow : Window
     {
-
+        
         public MainWindow()
         {
             InitializeComponent();
@@ -208,10 +215,17 @@ namespace petri
 
             viewModel.PlaceDot();
 
+            //FPS
+            //timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1f / 120f) };
+            //timer.Tick += TimerTick;
+            //timer.Start();
+
+
             System.Timers.Timer aTimer = new System.Timers.Timer();
             aTimer.Elapsed += new ElapsedEventHandler(viewModel.Calc);
             aTimer.Interval = 1;
             aTimer.Enabled = true;
         }
     }
+
 }
