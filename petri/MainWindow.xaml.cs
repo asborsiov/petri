@@ -19,6 +19,7 @@ using static petri.PgViewModel;
 using System.Threading;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 
 namespace petri
 {
@@ -28,12 +29,16 @@ namespace petri
 
         //Drawing related
         static object timerLock = new object();
-        public static int board = 1200; //width and height of the game field
+        public static int board = 1000; //width and height of the game field
         public static int bytesperpixel = 4;
         public static int stride = board * bytesperpixel;
         byte[] imgdata = new byte[board * board * bytesperpixel];
         public static WriteableBitmap currentPgImage = new WriteableBitmap(board, board, 96, 96, PixelFormats.Bgr32, null);
         public event PropertyChangedEventHandler PropertyChanged;
+        public static Stopwatch calcWatch = new Stopwatch();
+        public static Stopwatch graphicsWatch = new Stopwatch();
+        public static int monitorHits = 0;
+        public static int targetFPS = 60;
         public WriteableBitmap CurrentPgImage
         {
             get { return currentPgImage; }
@@ -125,7 +130,8 @@ namespace petri
 
         public void RemoveActors(List<int> removeActorsList)
         {
-            actorsList.RemoveAll(x => removeActorsList.Contains(actorsList.IndexOf(x)));
+            foreach (int index in removeActorsList.OrderByDescending(i => i))
+            actorsList.RemoveAt(index);
 
         }
         public void Calc(object source, ElapsedEventArgs e)
@@ -133,11 +139,15 @@ namespace petri
             //Prevent multiple threads to add items in a single list
             if (!Monitor.TryEnter(timerLock))
             {
+                monitorHits++;
+                MainWindow.main.monitorHits = monitorHits.ToString();
                 return;
             }
 
             try
             {
+                calcWatch.Start();
+
                 //Iterating over list index with count is slower than copying the list altogether, but then we have no index of them at all 
                 List<int> removeActorsList = new List<int>();
                 var k = actorsList.Count;
@@ -172,13 +182,23 @@ namespace petri
                         removeActorsList.Add(i);                      
                     }                 
                 }
-                //Verrry long, it's easer to not remove anything
-                //RemoveActors(removeActorsList);
+                RemoveActors(removeActorsList);
+
+                calcWatch.Stop();
+                int calcFPS = Convert.ToInt32(1000 / calcWatch.Elapsed.TotalMilliseconds);
+                MainWindow.main.calcFPS = calcFPS.ToString(); 
+                calcWatch.Reset();
 
                 App.Current.Dispatcher.BeginInvoke((Action)delegate
                     {
+                        graphicsWatch.Start();
                         currentPgImage.WritePixels(new Int32Rect(0, 0, board, board), imgdata, stride, 0);
+                        graphicsWatch.Stop();
+                        int graphicsFPS = Convert.ToInt32(1000 / graphicsWatch.Elapsed.TotalMilliseconds);
+                        MainWindow.main.graphicsFPS = (graphicsFPS).ToString(); 
+                        graphicsWatch.Reset();
                     });
+
             }
             finally
             {
@@ -188,19 +208,37 @@ namespace petri
 
 
     }
-    //https://stackoverflow.com/questions/16220472/how-to-create-a-bitmapimage-from-a-pixel-byte-array-live-video-display
     public partial class MainWindow : Window
     {
+        internal static MainWindow main;
+        internal string calcFPS
+        {
+            get { return calcFPScounter.Content.ToString(); }
+            set { Dispatcher.Invoke(new Action(() => { calcFPScounter.Content = value; })); }
+        }
+
+        internal string graphicsFPS
+        {
+            get { return graphicsFPScounter.Content.ToString(); }
+            set { Dispatcher.Invoke(new Action(() => { graphicsFPScounter.Content = value; })); }
+        }
+
+        internal string monitorHits
+        {
+            get { return monitorHitsCounter.Content.ToString(); }
+            set { Dispatcher.Invoke(new Action(() => { monitorHitsCounter.Content = value; })); }
+        }
 
         public MainWindow()
         {
             InitializeComponent();
+            main = this;
             var viewModel = new PgViewModel();
             DataContext = viewModel;
 
             viewModel.InitPlaceDot();
 
-            //FPS
+            //FPS example
             //timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1f / 120f) };
             //timer.Tick += TimerTick;
             //timer.Start();
@@ -208,8 +246,9 @@ namespace petri
 
             System.Timers.Timer aTimer = new System.Timers.Timer();
             aTimer.Elapsed += new ElapsedEventHandler(viewModel.Calc);
-            aTimer.Interval = 33;
+            aTimer.Interval = Convert.ToInt32(1000 / targetFPS);
             aTimer.Enabled = true;
+            targetFPSCounter.Content = targetFPS.ToString();
         }
     }
 }
