@@ -39,6 +39,10 @@ namespace petri
         public static Stopwatch graphicsWatch = new Stopwatch();
         public static int monitorHits = 0;
         public static int targetFPS = 60;
+        public static int lowestFPScalc = 1000000;
+        public static int lowestFPSgraph = 1000000;
+        //First calculations drop fps for some reason
+        public static int skipFirstBunchOfCalculations = 0;
         public WriteableBitmap CurrentPgImage
         {
             get { return currentPgImage; }
@@ -148,7 +152,7 @@ namespace petri
             {
                 calcWatch.Start();
 
-                //Iterating over list index with count is slower than copying the list altogether, but then we have no index of them at all 
+                //Iterating over list index with count is slower than copying the list altogether, but then we have no index of them and I don't know how to delete it after 
                 List<int> removeActorsList = new List<int>();
                 var k = actorsList.Count;
                 for (var i = 0; i < k; i++)
@@ -169,25 +173,33 @@ namespace petri
 
                     if (decisionList.Count != 0)
                     {
-                        Dot randomTarget = new Dot();
+                        //Dot randomTarget = new Dot();
                         //remove this random and fix already existing static random
                         Random rnd = new Random();
                         int r = rnd.Next(decisionList.Count);
 
-                        randomTarget = decisionList[r];
-                        PlaceDot(1, randomTarget.x, randomTarget.y);
+                        //randomTarget = decisionList[r];
+                        PlaceDot(1, decisionList[r].x, decisionList[r].y);
                     }
                     else
                     {
-                        removeActorsList.Add(i);                      
-                    }                 
+                        removeActorsList.Add(i);
+                    }
                 }
                 RemoveActors(removeActorsList);
 
+                MainWindow.main.actors = k.ToString();
+
                 calcWatch.Stop();
                 int calcFPS = Convert.ToInt32(1000 / calcWatch.Elapsed.TotalMilliseconds);
-                MainWindow.main.calcFPS = calcFPS.ToString(); 
+                MainWindow.main.calcFPS = calcFPS.ToString();
                 calcWatch.Reset();
+
+                if (lowestFPScalc > calcFPS && skipFirstBunchOfCalculations > 50)
+                {
+                    lowestFPScalc = calcFPS;
+                MainWindow.main.lowestCalcFPS = calcFPS.ToString();
+            }
 
                 App.Current.Dispatcher.BeginInvoke((Action)delegate
                     {
@@ -197,8 +209,14 @@ namespace petri
                         int graphicsFPS = Convert.ToInt32(1000 / graphicsWatch.Elapsed.TotalMilliseconds);
                         MainWindow.main.graphicsFPS = (graphicsFPS).ToString(); 
                         graphicsWatch.Reset();
-                    });
 
+                        if (lowestFPSgraph > graphicsFPS & skipFirstBunchOfCalculations > 50)
+                        {
+                            lowestFPSgraph = graphicsFPS;
+                            MainWindow.main.lowestGraphicsFPS = graphicsFPS.ToString();
+                        }
+                    });
+                skipFirstBunchOfCalculations++;
             }
             finally
             {
@@ -228,6 +246,25 @@ namespace petri
             get { return monitorHitsCounter.Content.ToString(); }
             set { Dispatcher.Invoke(new Action(() => { monitorHitsCounter.Content = value; })); }
         }
+
+        internal string actors
+        {
+            get { return actorsCounter.Content.ToString(); }
+            set { Dispatcher.Invoke(new Action(() => { actorsCounter.Content = value; })); }
+        }
+
+        internal string lowestCalcFPS
+        {
+            get { return lowestCalcFPSCounter.Content.ToString(); }
+            set { Dispatcher.Invoke(new Action(() => { lowestCalcFPSCounter.Content = value; })); }
+        }
+
+        internal string lowestGraphicsFPS
+        {
+            get { return lowestGraphicsFPSCounter.Content.ToString(); }
+            set { Dispatcher.Invoke(new Action(() => { lowestGraphicsFPSCounter.Content = value; })); }
+        }
+
 
         public MainWindow()
         {
