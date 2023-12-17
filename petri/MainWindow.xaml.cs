@@ -49,7 +49,7 @@ namespace petri
         //Jagged array is faster than 2d array or a single array for my data size
         //Did I properly init static array for a continious memory allocation?
         public static Dot[][] dots = InitDots();
-        public static List<Dot> actorsList = new List<Dot>();
+        public static List<Dot> actorsList = new List<Dot>();        
         [ThreadStatic]
         public static Random random = new Random();
 
@@ -123,7 +123,11 @@ namespace petri
             imgdata[x * stride + y * 4 + 3] = Convert.ToByte((100));
         }
 
+        public void RemoveActors(List<int> removeActorsList)
+        {
+            actorsList.RemoveAll(x => removeActorsList.Contains(actorsList.IndexOf(x)));
 
+        }
         public void Calc(object source, ElapsedEventArgs e)
         {
             //Prevent multiple threads to add items in a single list
@@ -135,10 +139,7 @@ namespace petri
             try
             {
                 //Iterating over list index with count is slower than copying the list altogether, but then we have no index of them at all 
-                //List<Dot> previousActorsList = new List<Dot>(actorsList);
-                //foreach (var actor in previousActorsList)
-                //for (var i = 0; i < actorsList.Count; i++) -- funny results
-
+                List<int> removeActorsList = new List<int>();
                 var k = actorsList.Count;
                 for (var i = 0; i < k; i++)
                 {
@@ -148,9 +149,6 @@ namespace petri
                     for (int sector_x = actorsList[i].x - 1; sector_x != actorsList[i].x + 2; sector_x++)
                     {
                         for (int sector_y = actorsList[i].y - 1; sector_y != actorsList[i].y + 2; sector_y++)
-                        //for (int sector_x = actor.x - 1; sector_x != actor.x + 2; sector_x++)
-                        //  {
-                        // for (int sector_y = actor.y - 1; sector_y != actor.y + 2; sector_y++)
                         {
                             if (dots[sector_x][sector_y].playerID == 0)
                             {
@@ -169,30 +167,13 @@ namespace petri
                         randomTarget = decisionList[r];
                         PlaceDot(1, randomTarget.x, randomTarget.y);
                     }
-
+                    else
+                    {
+                        removeActorsList.Add(i);                      
+                    }                 
                 }
-
-                /*            for (int row = 0; row < board; row++)
-                            {
-                                for (int col = 0; col < board; col++)
-                                {
-                                    if (dots[row][col].playerID == 1)
-                                    {
-                                        imgdata[row * stride + col * 4 + 0] = Convert.ToByte((100));
-                                        imgdata[row * stride + col * 4 + 1] = Convert.ToByte((100) );
-                                        imgdata[row * stride + col * 4 + 2] = Convert.ToByte((100) );
-                                        imgdata[row * stride + col * 4 + 3] = Convert.ToByte((100) );
-                                    }
-                                    else
-                                    {
-                                        imgdata[row * stride + col * 4 + 0] = Convert.ToByte(0xff);
-                                        imgdata[row * stride + col * 4 + 1] = Convert.ToByte(0xff);
-                                        imgdata[row * stride + col * 4 + 2] = Convert.ToByte(0xff);
-                                        imgdata[row * stride + col * 4 + 3] = Convert.ToByte(0xff);
-                                    }
-                                }
-                              }*/
-
+                //Verrry long, it's easer to not remove anything
+                //RemoveActors(removeActorsList);
 
                 App.Current.Dispatcher.BeginInvoke((Action)delegate
                     {
@@ -232,3 +213,36 @@ namespace petri
         }
     }
 }
+
+
+
+
+//List<Dot> previousActorsList = new List<Dot>(actorsList);
+//foreach (var actor in previousActorsList)
+//for (var i = 0; i < actorsList.Count; i++) -- funny results
+
+
+//for (int sector_x = actor.x - 1; sector_x != actor.x + 2; sector_x++)
+//  {
+// for (int sector_y = actor.y - 1; sector_y != actor.y + 2; sector_y++)
+
+/*            for (int row = 0; row < board; row++)
+            {
+                for (int col = 0; col < board; col++)
+                {
+                    if (dots[row][col].playerID == 1)
+                    {
+                        imgdata[row * stride + col * 4 + 0] = Convert.ToByte((100));
+                        imgdata[row * stride + col * 4 + 1] = Convert.ToByte((100) );
+                        imgdata[row * stride + col * 4 + 2] = Convert.ToByte((100) );
+                        imgdata[row * stride + col * 4 + 3] = Convert.ToByte((100) );
+                    }
+                    else
+                    {
+                        imgdata[row * stride + col * 4 + 0] = Convert.ToByte(0xff);
+                        imgdata[row * stride + col * 4 + 1] = Convert.ToByte(0xff);
+                        imgdata[row * stride + col * 4 + 2] = Convert.ToByte(0xff);
+                        imgdata[row * stride + col * 4 + 3] = Convert.ToByte(0xff);
+                    }
+                }
+              }*/
