@@ -66,8 +66,9 @@ namespace petri
         public struct Dot
         {
             public int playerID;
-            public int targetDot;
-            public int action;
+            public int signal;
+            public int density;
+            public int type; //0 - worker, 1 - warrior, 10 - resource
             //I need x and y despite them being equal to the indexes because I don't know how to store a Dot[][] in actorsList and knowing their index at the same time. Is there any better way?
             public int x;
             public int y;
@@ -88,11 +89,10 @@ namespace petri
                     result[x][y].x = x;
                     result[x][y].y = y;
                     if (x == 0 || x == board - 1 || y == 0 || y == board - 1)
-                    {
                         result[x][y].playerID = -1;
-                    }
                     else
                         result[x][y].playerID = 0;
+
 
                 }
             }
@@ -101,46 +101,89 @@ namespace petri
 
 
         //Place random dots to start the game
-        public void InitPlaceDot()
+        public void InitPlaceSpawn()
         {
 
             int randomPosX;
             int randomPosY;
 
-            for (var i = 0; i < 1; i++)
+            for (var i = 0; i < 2; i++)
             {
-                randomPosX = random.Next(500, 501);
-                randomPosY = random.Next(500, 501);
+                randomPosX = random.Next(500, 600);
+                randomPosY = random.Next(500, 600);
 
                 if ((dots[randomPosX][randomPosY].playerID == 0))
                 {
-                    PlaceDot(1, randomPosX, randomPosY);
+                    UpdateDotOwner(1, randomPosX, randomPosY);
+                    actorsList.Add(dots[randomPosX][randomPosY]);
+                }
+            }
+
+            for (var i = 0; i < 2; i++)
+            {
+                randomPosX = random.Next(300, 300);
+                randomPosY = random.Next(300, 300);
+
+                if ((dots[randomPosX][randomPosY].playerID == 0))
+                {
+                    UpdateDotOwner(2, randomPosX, randomPosY);
+                    actorsList.Add(dots[randomPosX][randomPosY]);
                 }
             }
         }
 
-        //Method for additng dots in running game
-        public void PlaceDot(int playerID, int x, int y)
+        public void UpdateDotOwner(int playerID, int x, int y)
         {
+            byte color;
             dots[x][y].playerID = playerID;
-            dots[x][y].x = x;
-            dots[x][y].y = y;
-            actorsList.Add(dots[x][y]);
-            imgdata[x * stride + y * 4 + 0] = Convert.ToByte((100));
-            imgdata[x * stride + y * 4 + 1] = Convert.ToByte((100));
-            imgdata[x * stride + y * 4 + 2] = Convert.ToByte((100));
-            imgdata[x * stride + y * 4 + 3] = Convert.ToByte((100));
+            if (playerID == 1)
+            {
+                color = 0x0000064;
+                imgdata[x * stride + y * 4 + 0] = color;
+                imgdata[x * stride + y * 4 + 1] = color;
+                imgdata[x * stride + y * 4 + 2] = color;
+                imgdata[x * stride + y * 4 + 3] = 0;
+            }
+            else if (playerID == 2)
+            {
+                color = 0x0000064;
+                imgdata[x * stride + y * 4 + 0] = color;
+                imgdata[x * stride + y * 4 + 1] = 0;
+                imgdata[x * stride + y * 4 + 2] = color;
+                imgdata[x * stride + y * 4 + 3] = color;
+            }
+            else
+            {
+                color = 0x000000FF;
+                imgdata[x * stride + y * 4 + 0] = 0;
+                imgdata[x * stride + y * 4 + 1] = 0;
+                imgdata[x * stride + y * 4 + 2] = 0;
+                imgdata[x * stride + y * 4 + 3] = color;
+            }
         }
 
-        public void RemoveActors(List<int> removeActorsList)
+
+        public List<Dot> ScanNeighbors(Dot actor)
         {
-            foreach (int index in removeActorsList.OrderByDescending(i => i))
-            actorsList.RemoveAt(index);
-
+            List<Dot> decisionList = new List<Dot>();
+            for (int sector_x = actor.x - 1; sector_x != actor.x + 2; sector_x++)
+            {
+                for (int sector_y = actor.y - 1; sector_y != actor.y + 2; sector_y++)
+                {
+                    if (dots[sector_x][sector_y].playerID == 0)
+                    {
+                        decisionList.Add(dots[sector_x][sector_y]);
+                    }
+                }
+            }
+            return decisionList;
         }
+
+
+
+
         public void Calc(object source, ElapsedEventArgs e)
         {
-            //Prevent multiple threads to add items in a single list
             if (!Monitor.TryEnter(timerLock))
             {
                 monitorHits++;
@@ -153,40 +196,41 @@ namespace petri
                 calcWatch.Start();
 
                 //Iterating over list index with count is slower than copying the list altogether, but then we have no index of them and I don't know how to delete it after 
-                List<int> removeActorsList = new List<int>();
+                List<int> actorsToDeleteList = new List<int>();
                 var k = actorsList.Count;
                 for (var i = 0; i < k; i++)
                 {
-                    //List of possible directions to grow for this Dot
-                    List<Dot> decisionList = new List<Dot>();
 
-                    for (int sector_x = actorsList[i].x - 1; sector_x != actorsList[i].x + 2; sector_x++)
-                    {
-                        for (int sector_y = actorsList[i].y - 1; sector_y != actorsList[i].y + 2; sector_y++)
+                        List<Dot> decisionList = ScanNeighbors(actorsList[i]);
+                        if (decisionList.Count != 0)
                         {
-                            if (dots[sector_x][sector_y].playerID == 0)
+                            Random rndDestination = new Random();
+                            int r = rndDestination.Next(decisionList.Count);
+
+                            Random rndMoveOrProcreate = new Random();
+                            if (rndMoveOrProcreate.Next(0, 100) < 5 || decisionList.Count == 1 )
                             {
-                                decisionList.Add(dots[sector_x][sector_y]);
+                                UpdateDotOwner(actorsList[i].playerID, decisionList[r].x, decisionList[r].y);
+                                actorsList.Add(dots[decisionList[r].x][decisionList[r].y]);
                             }
-                        }
-                    }
-
-                    if (decisionList.Count != 0)
-                    {
-                        //Dot randomTarget = new Dot();
-                        //remove this random and fix already existing static random
-                        Random rnd = new Random();
-                        int r = rnd.Next(decisionList.Count);
-
-                        //randomTarget = decisionList[r];
-                        PlaceDot(1, decisionList[r].x, decisionList[r].y);
-                    }
+                            else
+                            {
+                                UpdateDotOwner(actorsList[i].playerID, decisionList[r].x, decisionList[r].y);
+                                actorsList.Add(dots[decisionList[r].x][decisionList[r].y]);
+                                UpdateDotOwner(0, actorsList[i].x, actorsList[i].y);
+                                actorsToDeleteList.Add(i);
+                            }
+                        }                    
                     else
                     {
-                        removeActorsList.Add(i);
+                        //UpdateDotOwner(0, actorsList[i].x, actorsList[i].y);
+                        actorsToDeleteList.Add(i);
                     }
                 }
-                RemoveActors(removeActorsList);
+
+                foreach (int index in actorsToDeleteList.OrderByDescending(i => i))
+                    actorsList.RemoveAt(index);
+                actorsToDeleteList.Clear();
 
                 MainWindow.main.actors = k.ToString();
 
@@ -273,13 +317,7 @@ namespace petri
             var viewModel = new PgViewModel();
             DataContext = viewModel;
 
-            viewModel.InitPlaceDot();
-
-            //FPS example
-            //timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1f / 120f) };
-            //timer.Tick += TimerTick;
-            //timer.Start();
-
+            viewModel.InitPlaceSpawn();
 
             System.Timers.Timer aTimer = new System.Timers.Timer();
             aTimer.Elapsed += new ElapsedEventHandler(viewModel.Calc);
@@ -289,36 +327,3 @@ namespace petri
         }
     }
 }
-
-
-
-
-//List<Dot> previousActorsList = new List<Dot>(actorsList);
-//foreach (var actor in previousActorsList)
-//for (var i = 0; i < actorsList.Count; i++) -- funny results
-
-
-//for (int sector_x = actor.x - 1; sector_x != actor.x + 2; sector_x++)
-//  {
-// for (int sector_y = actor.y - 1; sector_y != actor.y + 2; sector_y++)
-
-/*            for (int row = 0; row < board; row++)
-            {
-                for (int col = 0; col < board; col++)
-                {
-                    if (dots[row][col].playerID == 1)
-                    {
-                        imgdata[row * stride + col * 4 + 0] = Convert.ToByte((100));
-                        imgdata[row * stride + col * 4 + 1] = Convert.ToByte((100) );
-                        imgdata[row * stride + col * 4 + 2] = Convert.ToByte((100) );
-                        imgdata[row * stride + col * 4 + 3] = Convert.ToByte((100) );
-                    }
-                    else
-                    {
-                        imgdata[row * stride + col * 4 + 0] = Convert.ToByte(0xff);
-                        imgdata[row * stride + col * 4 + 1] = Convert.ToByte(0xff);
-                        imgdata[row * stride + col * 4 + 2] = Convert.ToByte(0xff);
-                        imgdata[row * stride + col * 4 + 3] = Convert.ToByte(0xff);
-                    }
-                }
-              }*/
