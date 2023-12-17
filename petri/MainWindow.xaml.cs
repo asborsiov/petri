@@ -26,11 +26,11 @@ namespace petri
     class PgViewModel : INotifyPropertyChanged
     {
 
-        //Drawing board
+        //Drawing related
         static object timerLock = new object();
         public static int board = 1200; //width and height of the game field
         public static int bytesperpixel = 4;
-        public static int stride = board * bytesperpixel; 
+        public static int stride = board * bytesperpixel;
         byte[] imgdata = new byte[board * board * bytesperpixel];
         public static WriteableBitmap currentPgImage = new WriteableBitmap(board, board, 96, 96, PixelFormats.Bgr32, null);
         public event PropertyChangedEventHandler PropertyChanged;
@@ -75,24 +75,24 @@ namespace petri
             {
                 result[x] = new Dot[board];
                 for (int y = 0; y < board; ++y)
-                {                 
+                {
                     result[x][y].x = x;
                     result[x][y].y = y;
                     if (x == 0 || x == board - 1 || y == 0 || y == board - 1)
-                    {                                   
-                    result[x][y].playerID = -1;
+                    {
+                        result[x][y].playerID = -1;
                     }
                     else
-                    result[x][y].playerID = 0;
+                        result[x][y].playerID = 0;
 
                 }
-            }              
+            }
             return result;
         }
 
 
         //Place random dots to start the game
-        public void PlaceDot()
+        public void InitPlaceDot()
         {
 
             int randomPosX;
@@ -105,13 +105,22 @@ namespace petri
 
                 if ((dots[randomPosX][randomPosY].playerID == 0))
                 {
-                    dots[randomPosX][randomPosY].playerID = 1;
-                    dots[randomPosX][randomPosY].x = randomPosX;
-                    dots[randomPosX][randomPosY].y = randomPosY;
-                    actorsList.Add(dots[randomPosX][randomPosY]);
-
+                    PlaceDot(1, randomPosX, randomPosY);
                 }
             }
+        }
+
+        //Method for additng dots in running game
+        public void PlaceDot(int playerID, int x, int y)
+        {
+            dots[x][y].playerID = playerID;
+            dots[x][y].x = x;
+            dots[x][y].y = y;
+            actorsList.Add(dots[x][y]);
+            imgdata[x * stride + y * 4 + 0] = Convert.ToByte((100));
+            imgdata[x * stride + y * 4 + 1] = Convert.ToByte((100));
+            imgdata[x * stride + y * 4 + 2] = Convert.ToByte((100));
+            imgdata[x * stride + y * 4 + 3] = Convert.ToByte((100));
         }
 
 
@@ -123,97 +132,92 @@ namespace petri
                 return;
             }
 
-             try
+            try
             {
+                //Iterating over list index with count is slower than copying the list altogether, but then we have no index of them at all 
+                //List<Dot> previousActorsList = new List<Dot>(actorsList);
+                //foreach (var actor in previousActorsList)
+                //for (var i = 0; i < actorsList.Count; i++) -- funny results
 
-                //Copy the list, because we can't add new Dots while iterating them
-                //Iterating over list index with count is slower than copying the list altogether
-                List<Dot> previousActorsList = new List<Dot>(actorsList);
-
-                foreach (var actor in previousActorsList)
+                var k = actorsList.Count;
+                for (var i = 0; i < k; i++)
                 {
                     //List of possible directions to grow for this Dot
                     List<Dot> decisionList = new List<Dot>();
 
-                //Looking for 8 neighbors. A sector is a 3x3 box
-                for (int sector_x = actor.x - 1; sector_x != actor.x + 2; sector_x++)
-                {
-                    for (int sector_y = actor.y - 1; sector_y != actor.y + 2; sector_y++)
+                    for (int sector_x = actorsList[i].x - 1; sector_x != actorsList[i].x + 2; sector_x++)
                     {
-                        if (dots[sector_x][sector_y].playerID == 0)
+                        for (int sector_y = actorsList[i].y - 1; sector_y != actorsList[i].y + 2; sector_y++)
+                        //for (int sector_x = actor.x - 1; sector_x != actor.x + 2; sector_x++)
+                        //  {
+                        // for (int sector_y = actor.y - 1; sector_y != actor.y + 2; sector_y++)
                         {
-                            decisionList.Add(dots[sector_x][sector_y]);
+                            if (dots[sector_x][sector_y].playerID == 0)
+                            {
+                                decisionList.Add(dots[sector_x][sector_y]);
+                            }
                         }
                     }
-                }
-                
-                //Procreate a new dot in random direction
-                if (decisionList.Count != 0)
-                {
-                //remove this random and fix already existing static random
-                Random rnd = new Random();
-                
-                int r = rnd.Next(decisionList.Count);
-                Dot randomTarget = new Dot();
-                randomTarget = decisionList[r];
-                dots[randomTarget.x][randomTarget.y].playerID = 1;
-                dots[randomTarget.x][randomTarget.y].x = randomTarget.x;
-                dots[randomTarget.x][randomTarget.y].y = randomTarget.y;
-                actorsList.Add(dots[randomTarget.x][randomTarget.y]);
-                imgdata[randomTarget.x * stride + randomTarget.y * 4 + 0] = Convert.ToByte((100));
-                imgdata[randomTarget.x * stride + randomTarget.y * 4 + 1] = Convert.ToByte((100) );
-                imgdata[randomTarget.x * stride + randomTarget.y * 4 + 2] = Convert.ToByte((100) );
-                imgdata[randomTarget.x * stride + randomTarget.y * 4 + 3] = Convert.ToByte((100) );
-                }
+
+                    if (decisionList.Count != 0)
+                    {
+                        Dot randomTarget = new Dot();
+                        //remove this random and fix already existing static random
+                        Random rnd = new Random();
+                        int r = rnd.Next(decisionList.Count);
+
+                        randomTarget = decisionList[r];
+                        PlaceDot(1, randomTarget.x, randomTarget.y);
+                    }
+
                 }
 
-/*            for (int row = 0; row < board; row++)
-            {
-                for (int col = 0; col < board; col++)
-                {
-                    if (dots[row][col].playerID == 1)
-                    {
-                        imgdata[row * stride + col * 4 + 0] = Convert.ToByte((100));
-                        imgdata[row * stride + col * 4 + 1] = Convert.ToByte((100) );
-                        imgdata[row * stride + col * 4 + 2] = Convert.ToByte((100) );
-                        imgdata[row * stride + col * 4 + 3] = Convert.ToByte((100) );
-                    }
-                    else
-                    {
-                        imgdata[row * stride + col * 4 + 0] = Convert.ToByte(0xff);
-                        imgdata[row * stride + col * 4 + 1] = Convert.ToByte(0xff);
-                        imgdata[row * stride + col * 4 + 2] = Convert.ToByte(0xff);
-                        imgdata[row * stride + col * 4 + 3] = Convert.ToByte(0xff);
-                    }
-                }
-              }*/
+                /*            for (int row = 0; row < board; row++)
+                            {
+                                for (int col = 0; col < board; col++)
+                                {
+                                    if (dots[row][col].playerID == 1)
+                                    {
+                                        imgdata[row * stride + col * 4 + 0] = Convert.ToByte((100));
+                                        imgdata[row * stride + col * 4 + 1] = Convert.ToByte((100) );
+                                        imgdata[row * stride + col * 4 + 2] = Convert.ToByte((100) );
+                                        imgdata[row * stride + col * 4 + 3] = Convert.ToByte((100) );
+                                    }
+                                    else
+                                    {
+                                        imgdata[row * stride + col * 4 + 0] = Convert.ToByte(0xff);
+                                        imgdata[row * stride + col * 4 + 1] = Convert.ToByte(0xff);
+                                        imgdata[row * stride + col * 4 + 2] = Convert.ToByte(0xff);
+                                        imgdata[row * stride + col * 4 + 3] = Convert.ToByte(0xff);
+                                    }
+                                }
+                              }*/
 
-                //var gradient = BitmapSource.Create(board, board, 96, 96, PixelFormats.Bgra32, null, imgdata, stride);
-               
-            App.Current.Dispatcher.BeginInvoke((Action)delegate
-                {
-                    currentPgImage.WritePixels(new Int32Rect(0, 0, board, board), imgdata, stride, 0);
-                });
+
+                App.Current.Dispatcher.BeginInvoke((Action)delegate
+                    {
+                        currentPgImage.WritePixels(new Int32Rect(0, 0, board, board), imgdata, stride, 0);
+                    });
             }
             finally
             {
                 Monitor.Exit(timerLock);
             }
-        }    
+        }
 
 
     }
     //https://stackoverflow.com/questions/16220472/how-to-create-a-bitmapimage-from-a-pixel-byte-array-live-video-display
     public partial class MainWindow : Window
     {
-        
+
         public MainWindow()
         {
             InitializeComponent();
             var viewModel = new PgViewModel();
             DataContext = viewModel;
 
-            viewModel.PlaceDot();
+            viewModel.InitPlaceDot();
 
             //FPS
             //timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1f / 120f) };
@@ -223,12 +227,8 @@ namespace petri
 
             System.Timers.Timer aTimer = new System.Timers.Timer();
             aTimer.Elapsed += new ElapsedEventHandler(viewModel.Calc);
-            aTimer.Interval = 1;
+            aTimer.Interval = 33;
             aTimer.Enabled = true;
         }
     }
-
-
-
-
 }
