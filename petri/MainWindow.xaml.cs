@@ -61,7 +61,8 @@ namespace petri
         //Jagged array is faster than 2d array or a single array for my data size
         //Did I properly init static array for a continious memory allocation?
         public static Dot[][] dots = InitDots();
-        public static List<Dot> actorsList = new List<Dot>();        
+        public static List<Dot> actorsList = new List<Dot>();
+        public static List<Dot> actorsToRetainList = new List<Dot>();
         [ThreadStatic]
         public static Random random = new Random();
 
@@ -110,10 +111,10 @@ namespace petri
             int randomPosX;
             int randomPosY;
 
-            for (var i = 0; i < 50; i++)
+            for (var i = 0; i < 150; i++)
             {
-                randomPosX = random.Next(500, 600);
-                randomPosY = random.Next(500, 600);
+                randomPosX = random.Next(500, 800);
+                randomPosY = random.Next(500, 800);
 
                 if ((dots[randomPosX][randomPosY].playerID == 0))
                 {
@@ -122,10 +123,10 @@ namespace petri
                 }
             }
 
-            for (var i = 0; i < 50; i++)
+            for (var i = 0; i < 150; i++)
             {
-                randomPosX = random.Next(300, 400);
-                randomPosY = random.Next(300, 400);
+                randomPosX = random.Next(200, 400);
+                randomPosY = random.Next(200, 400);
 
                 if ((dots[randomPosX][randomPosY].playerID == 0))
                 {
@@ -201,47 +202,47 @@ namespace petri
                 //Use nullable class instead of struct and this list?
                 //LinkedList?
                 //Dict?
-
-                List<Dot> actorsToRetainList = new List<Dot>();
+                                
                 var actor = actorsList.Count;
-                for (var i = 0; i < actor; i++)
+
+                //foreach(Dot a in actorsList)
+                Parallel.ForEach(actorsList, a =>
                 {
-
-                    List<Dot> decisionList = ScanNeighbors(actorsList[i]);
-                    if (decisionList.Count != 0)
-                    {
-                        Random rndDestination = new Random();
-                        int r = rndDestination.Next(decisionList.Count);
-
-                        if (actorsList[i].type == 10)
+                        List<Dot> decisionList = ScanNeighbors(a);
+                        if (decisionList.Count != 0)
                         {
-                            actorsToRetainList.Add(dots[actorsList[i].x][actorsList[i].y]);
+                            Random rndDestination = new Random();
+                            int r = rndDestination.Next(decisionList.Count);
 
-                            UpdateDotOwner(actorsList[i].playerID, decisionList[r].x, decisionList[r].y, 0);
-                            actorsToRetainList.Add(dots[decisionList[r].x][decisionList[r].y]);
+                            if (a.type == 10)
+                            {
+                                actorsToRetainList.Add(dots[a.x][a.y]);
+
+                                UpdateDotOwner(a.playerID, decisionList[r].x, decisionList[r].y, 0);
+                                actorsToRetainList.Add(dots[decisionList[r].x][decisionList[r].y]);
+                            }
+                            else
+                            {
+                                UpdateDotOwner(a.playerID, decisionList[r].x, decisionList[r].y, 0);
+                                actorsToRetainList.Add(dots[decisionList[r].x][decisionList[r].y]);
+
+                                UpdateDotOwner(0, a.x, a.y, 0);
+
+                            }
                         }
                         else
                         {
-                            UpdateDotOwner(actorsList[i].playerID, decisionList[r].x, decisionList[r].y, 0);
-                            actorsToRetainList.Add(dots[decisionList[r].x][decisionList[r].y]);
+                            //  keep immobilized dots alive for awhile
+                            actorsToRetainList.Add(dots[a.x][a.y]);
 
-                            UpdateDotOwner(0, actorsList[i].x, actorsList[i].y, 0);
-                           
-                        }
-                    }
-                    else
-                    {
-
-                        actorsToRetainList.Add(dots[actorsList[i].x][actorsList[i].y]);
-                        //   if (actorsList[i].type != 10)
-                        //       UpdateDotOwner(0, actorsList[i].x, actorsList[i].y, 0);                            
-                    }
-                }
+                        }                    
+                });
 
 
                 cleanupWatch.Start();
-                actorsList.RemoveRange(0, actorsList.Count);
+                actorsList.Clear();
                 actorsList.AddRange(actorsToRetainList);
+                actorsToRetainList.Clear();
                 cleanupWatch.Stop();
                 int cleanupFPS = Convert.ToInt32(1000 / cleanupWatch.Elapsed.TotalMilliseconds);
                 cleanupWatch.Reset();
