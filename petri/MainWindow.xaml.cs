@@ -205,8 +205,8 @@ namespace petri
                                 
                 var actor = actorsList.Count;
 
-                //foreach(Dot a in actorsList)
-                Parallel.ForEach(actorsList, a =>
+                foreach(Dot a in actorsList)
+                //Parallel.ForEach(actorsList, a =>
                 {
                         List<Dot> decisionList = ScanNeighbors(a);
                         if (decisionList.Count != 0)
@@ -236,8 +236,7 @@ namespace petri
                             actorsToRetainList.Add(dots[a.x][a.y]);
 
                         }                    
-                });
-
+                }
 
                 cleanupWatch.Start();
                 actorsList.Clear();
