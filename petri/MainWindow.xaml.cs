@@ -110,7 +110,7 @@ namespace petri
             int randomPosX;
             int randomPosY;
 
-            for (var i = 0; i < 2; i++)
+            for (var i = 0; i < 50; i++)
             {
                 randomPosX = random.Next(500, 600);
                 randomPosY = random.Next(500, 600);
@@ -122,10 +122,10 @@ namespace petri
                 }
             }
 
-            for (var i = 0; i < 2; i++)
+            for (var i = 0; i < 50; i++)
             {
-                randomPosX = random.Next(300, 300);
-                randomPosY = random.Next(300, 300);
+                randomPosX = random.Next(300, 400);
+                randomPosY = random.Next(300, 400);
 
                 if ((dots[randomPosX][randomPosY].playerID == 0))
                 {
@@ -173,7 +173,7 @@ namespace petri
             {
                 for (int sector_y = actor.y - 1; sector_y != actor.y + 2; sector_y++)
                 {
-                    if (dots[sector_x][sector_y].type != 10 && dots[sector_x][sector_y].playerID != 1 && dots[sector_x][sector_y].playerID != 2)
+                    if (dots[sector_x][sector_y].type != 10 && dots[sector_x][sector_y].playerID != -1 && dots[sector_x][sector_y].playerID != 1 && dots[sector_x][sector_y].playerID != 2)
                     {
                         decisionList.Add(dots[sector_x][sector_y]);
                     }
@@ -199,6 +199,9 @@ namespace petri
                 calcWatch.Start();
 
                 //Use nullable class instead of struct and this list?
+                //LinkedList?
+                //Dict?
+
                 List<Dot> actorsToRetainList = new List<Dot>();
                 var actor = actorsList.Count;
                 for (var i = 0; i < actor; i++)
@@ -241,6 +244,7 @@ namespace petri
                 actorsList.AddRange(actorsToRetainList);
                 cleanupWatch.Stop();
                 int cleanupFPS = Convert.ToInt32(1000 / cleanupWatch.Elapsed.TotalMilliseconds);
+                cleanupWatch.Reset();
 
                 MainWindow.main.cleanupFPS = cleanupFPS.ToString();
 
@@ -257,10 +261,13 @@ namespace petri
                 MainWindow.main.lowestCalcFPS = calcFPS.ToString();
             }
 
-                App.Current.Dispatcher.BeginInvoke((Action)delegate
+                App.Current.Dispatcher.Invoke((Action)delegate
                     {
                         graphicsWatch.Start();
+
+
                         currentPgImage.WritePixels(new Int32Rect(0, 0, board, board), imgdata, stride, 0);
+
                         graphicsWatch.Stop();
                         int graphicsFPS = Convert.ToInt32(1000 / graphicsWatch.Elapsed.TotalMilliseconds);
                         MainWindow.main.graphicsFPS = (graphicsFPS).ToString(); 
