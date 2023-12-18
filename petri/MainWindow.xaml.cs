@@ -20,6 +20,7 @@ using System.Threading;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System.Security.AccessControl;
 
 namespace petri
 {
@@ -36,6 +37,7 @@ namespace petri
         public static WriteableBitmap currentPgImage = new WriteableBitmap(board, board, 96, 96, PixelFormats.Bgr32, null);
         public event PropertyChangedEventHandler PropertyChanged;
         public static Stopwatch calcWatch = new Stopwatch();
+        public static Stopwatch cleanupWatch = new Stopwatch();
         public static Stopwatch graphicsWatch = new Stopwatch();
         public static int monitorHits = 0;
         public static int targetFPS = 60;
@@ -68,7 +70,7 @@ namespace petri
             public int playerID;
             public int signal;
             public int density;
-            public int type; //0 - worker, 1 - warrior, 10 - resource
+            public int type; //0 - worker, 1 - warrior, 10 - resource, 11 empty
             //I need x and y despite them being equal to the indexes because I don't know how to store a Dot[][] in actorsList and knowing their index at the same time. Is there any better way?
             public int x;
             public int y;
@@ -114,7 +116,7 @@ namespace petri
 
                 if ((dots[randomPosX][randomPosY].playerID == 0))
                 {
-                    UpdateDotOwner(1, randomPosX, randomPosY);
+                    UpdateDotOwner(1, randomPosX, randomPosY, 10);
                     actorsList.Add(dots[randomPosX][randomPosY]);
                 }
             }
@@ -126,15 +128,16 @@ namespace petri
 
                 if ((dots[randomPosX][randomPosY].playerID == 0))
                 {
-                    UpdateDotOwner(2, randomPosX, randomPosY);
+                    UpdateDotOwner(2, randomPosX, randomPosY, 10);
                     actorsList.Add(dots[randomPosX][randomPosY]);
                 }
             }
         }
 
-        public void UpdateDotOwner(int playerID, int x, int y)
+        public void UpdateDotOwner(int playerID, int x, int y, int type)
         {
             byte color;
+            dots[x][y].type = type;
             dots[x][y].playerID = playerID;
             if (playerID == 1)
             {
@@ -154,11 +157,10 @@ namespace petri
             }
             else
             {
-                color = 0x000000FF;
                 imgdata[x * stride + y * 4 + 0] = 0;
                 imgdata[x * stride + y * 4 + 1] = 0;
                 imgdata[x * stride + y * 4 + 2] = 0;
-                imgdata[x * stride + y * 4 + 3] = color;
+                imgdata[x * stride + y * 4 + 3] = 0;
             }
         }
 
@@ -170,7 +172,7 @@ namespace petri
             {
                 for (int sector_y = actor.y - 1; sector_y != actor.y + 2; sector_y++)
                 {
-                    if (dots[sector_x][sector_y].playerID == 0)
+                    if (dots[sector_x][sector_y].playerID != 10)
                     {
                         decisionList.Add(dots[sector_x][sector_y]);
                     }
@@ -195,44 +197,67 @@ namespace petri
             {
                 calcWatch.Start();
 
-                //Iterating over list index with count is slower than copying the list altogether, but then we have no index of them and I don't know how to delete it after 
+            //Iterating over list index with count is slower than copying the list altogether, but then we have no index of them and I don't know how to delete it after 
+
+            ///
+            /// LinkedList ?
+            ///
+
+            //List<Dot> currentActorsList = new List<Dot>();
+            //List<int> actorsToDeleteList = new List<int>();
+            //currentActorsList.AddRange(actorsList);
+
+            //https://stackoverflow.com/questions/6926554/how-to-quickly-remove-items-from-a-list
                 List<int> actorsToDeleteList = new List<int>();
-                var k = actorsList.Count;
-                for (var i = 0; i < k; i++)
+                var actor = actorsList.Count;
+                for (var i = 0; i < actor; i++)
                 {
 
-                        List<Dot> decisionList = ScanNeighbors(actorsList[i]);
-                        if (decisionList.Count != 0)
-                        {
-                            Random rndDestination = new Random();
-                            int r = rndDestination.Next(decisionList.Count);
+                    List<Dot> decisionList = ScanNeighbors(actorsList[i]);
+                    if (decisionList.Count != 0)
+                    {
+                        Random rndDestination = new Random();
+                        int r = rndDestination.Next(decisionList.Count);
 
-                            Random rndMoveOrProcreate = new Random();
-                            if (rndMoveOrProcreate.Next(0, 100) < 5 || decisionList.Count == 1 )
-                            {
-                                UpdateDotOwner(actorsList[i].playerID, decisionList[r].x, decisionList[r].y);
-                                actorsList.Add(dots[decisionList[r].x][decisionList[r].y]);
-                            }
-                            else
-                            {
-                                UpdateDotOwner(actorsList[i].playerID, decisionList[r].x, decisionList[r].y);
-                                actorsList.Add(dots[decisionList[r].x][decisionList[r].y]);
-                                UpdateDotOwner(0, actorsList[i].x, actorsList[i].y);
-                                actorsToDeleteList.Add(i);
-                            }
-                        }                    
+                        //Random rndMoveOrProcreate = new Random();
+                        //if (rndMoveOrProcreate.Next(0, 100) < 5 || decisionList.Count == 1 )
+                        if (actorsList[i].type == 10)
+                        {
+                            UpdateDotOwner(actorsList[i].playerID, decisionList[r].x, decisionList[r].y, 0);
+                            actorsList.Add(dots[decisionList[r].x][decisionList[r].y]);
+                        }
+                        else
+                        {
+                            UpdateDotOwner(actorsList[i].playerID, decisionList[r].x, decisionList[r].y, 0);
+                            actorsList.Add(dots[decisionList[r].x][decisionList[r].y]);
+                            UpdateDotOwner(0, actorsList[i].x, actorsList[i].y, 0);
+                            actorsToDeleteList.Add(i);
+                        }
+                    }
                     else
                     {
-                        //UpdateDotOwner(0, actorsList[i].x, actorsList[i].y);
-                        actorsToDeleteList.Add(i);
+                        if (actorsList[i].type != 10)
+                            //UpdateDotOwner(0, actorsList[i].x, actorsList[i].y);
+                            actorsToDeleteList.Add(i);
                     }
                 }
 
+
+
+
+
+
+
+                cleanupWatch.Start();
                 foreach (int index in actorsToDeleteList.OrderByDescending(i => i))
                     actorsList.RemoveAt(index);
                 actorsToDeleteList.Clear();
+                cleanupWatch.Stop();
+                int cleanupFPS = Convert.ToInt32(1000 / cleanupWatch.Elapsed.TotalMilliseconds);
 
-                MainWindow.main.actors = k.ToString();
+                //MainWindow.main.cleanupFPS = cleanupFPS.ToString();
+
+                MainWindow.main.actors = actorsList.Count().ToString();
 
                 calcWatch.Stop();
                 int calcFPS = Convert.ToInt32(1000 / calcWatch.Elapsed.TotalMilliseconds);
@@ -309,6 +334,12 @@ namespace petri
             set { Dispatcher.Invoke(new Action(() => { lowestGraphicsFPSCounter.Content = value; })); }
         }
 
+        internal string cleanupFPS
+        {
+            get { return cleanupCounter.Content.ToString(); }
+            set { Dispatcher.Invoke(new Action(() => { cleanupCounter.Content = value; })); }
+        }
+
 
         public MainWindow()
         {
@@ -318,6 +349,8 @@ namespace petri
             DataContext = viewModel;
 
             viewModel.InitPlaceSpawn();
+
+
 
             System.Timers.Timer aTimer = new System.Timers.Timer();
             aTimer.Elapsed += new ElapsedEventHandler(viewModel.Calc);
