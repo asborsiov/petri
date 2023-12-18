@@ -26,7 +26,8 @@
         <Label x:Name="lowestGraphicsFPSLabel" Content="Low. graph FPS" HorizontalAlignment="Left" Margin="1210,85,0,0" VerticalAlignment="Top"/>
         <Label x:Name="lowestCalcFPSCounter" Content="" HorizontalAlignment="Left" Margin="1300,100,0,0" VerticalAlignment="Top"/>
         <Label x:Name="lowestCalcFPSLabel" Content="Low. calc FPS" HorizontalAlignment="Left" Margin="1210,100,0,0" VerticalAlignment="Top"/>
-
+        <Label x:Name="cleanupCounter" Content="" HorizontalAlignment="Left" Margin="1300,115,0,0" VerticalAlignment="Top"/>
+        <Label x:Name="cleanupLabel" Content="Delete actor FPS" HorizontalAlignment="Left" Margin="1210,115,0,0" VerticalAlignment="Top"/>
 
         <Image x:Name="pg" Height="1000" Width="1000" Margin="26,26,242,0" VerticalAlignment="Top" Source="{Binding CurrentPgImage}" RenderOptions.BitmapScalingMode="LowQuality" >
             <Image.RenderTransform>
