@@ -21,6 +21,7 @@ using System.Windows.Threading;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Security.AccessControl;
+using System.Collections.Generic;
 
 namespace petri
 {
@@ -172,7 +173,7 @@ namespace petri
             {
                 for (int sector_y = actor.y - 1; sector_y != actor.y + 2; sector_y++)
                 {
-                    if (dots[sector_x][sector_y].playerID != 10)
+                    if (dots[sector_x][sector_y].type != 10 && dots[sector_x][sector_y].playerID != 1 && dots[sector_x][sector_y].playerID != 2)
                     {
                         decisionList.Add(dots[sector_x][sector_y]);
                     }
@@ -197,18 +198,8 @@ namespace petri
             {
                 calcWatch.Start();
 
-            //Iterating over list index with count is slower than copying the list altogether, but then we have no index of them and I don't know how to delete it after 
-
-            ///
-            /// LinkedList ?
-            ///
-
-            //List<Dot> currentActorsList = new List<Dot>();
-            //List<int> actorsToDeleteList = new List<int>();
-            //currentActorsList.AddRange(actorsList);
-
-            //https://stackoverflow.com/questions/6926554/how-to-quickly-remove-items-from-a-list
-                List<int> actorsToDeleteList = new List<int>();
+                //Use nullable class instead of struct and this list?
+                List<Dot> actorsToRetainList = new List<Dot>();
                 var actor = actorsList.Count;
                 for (var i = 0; i < actor; i++)
                 {
@@ -219,43 +210,39 @@ namespace petri
                         Random rndDestination = new Random();
                         int r = rndDestination.Next(decisionList.Count);
 
-                        //Random rndMoveOrProcreate = new Random();
-                        //if (rndMoveOrProcreate.Next(0, 100) < 5 || decisionList.Count == 1 )
                         if (actorsList[i].type == 10)
                         {
+                            actorsToRetainList.Add(dots[actorsList[i].x][actorsList[i].y]);
+
                             UpdateDotOwner(actorsList[i].playerID, decisionList[r].x, decisionList[r].y, 0);
-                            actorsList.Add(dots[decisionList[r].x][decisionList[r].y]);
+                            actorsToRetainList.Add(dots[decisionList[r].x][decisionList[r].y]);
                         }
                         else
                         {
                             UpdateDotOwner(actorsList[i].playerID, decisionList[r].x, decisionList[r].y, 0);
-                            actorsList.Add(dots[decisionList[r].x][decisionList[r].y]);
+                            actorsToRetainList.Add(dots[decisionList[r].x][decisionList[r].y]);
+
                             UpdateDotOwner(0, actorsList[i].x, actorsList[i].y, 0);
-                            actorsToDeleteList.Add(i);
+                           
                         }
                     }
                     else
                     {
-                        if (actorsList[i].type != 10)
-                            //UpdateDotOwner(0, actorsList[i].x, actorsList[i].y);
-                            actorsToDeleteList.Add(i);
+
+                        actorsToRetainList.Add(dots[actorsList[i].x][actorsList[i].y]);
+                        //   if (actorsList[i].type != 10)
+                        //       UpdateDotOwner(0, actorsList[i].x, actorsList[i].y, 0);                            
                     }
                 }
 
 
-
-
-
-
-
                 cleanupWatch.Start();
-                foreach (int index in actorsToDeleteList.OrderByDescending(i => i))
-                    actorsList.RemoveAt(index);
-                actorsToDeleteList.Clear();
+                actorsList.RemoveRange(0, actorsList.Count);
+                actorsList.AddRange(actorsToRetainList);
                 cleanupWatch.Stop();
                 int cleanupFPS = Convert.ToInt32(1000 / cleanupWatch.Elapsed.TotalMilliseconds);
 
-                //MainWindow.main.cleanupFPS = cleanupFPS.ToString();
+                MainWindow.main.cleanupFPS = cleanupFPS.ToString();
 
                 MainWindow.main.actors = actorsList.Count().ToString();
 
