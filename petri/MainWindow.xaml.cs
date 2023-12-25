@@ -22,6 +22,7 @@ using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Security.AccessControl;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 
 namespace petri
 {
@@ -31,51 +32,44 @@ namespace petri
 
         //Drawing related
         static object timerLock = new object();
-        public static int board = 1000; //width and height of the game field
+        public static int board = 500; //width and height of the game field
         public static int bytesperpixel = 4;
         public static int stride = board * bytesperpixel;
-        byte[] imgdata = new byte[board * board * bytesperpixel];
-        public static WriteableBitmap currentPgImage = new WriteableBitmap(board, board, 96, 96, PixelFormats.Bgr32, null);
+        public static byte[] imgdata = new byte[board * board * bytesperpixel];
         public event PropertyChangedEventHandler PropertyChanged;
         public static Stopwatch calcWatch = new Stopwatch();
-        public static Stopwatch cleanupWatch = new Stopwatch();
         public static Stopwatch graphicsWatch = new Stopwatch();
         public static int monitorHits = 0;
+        public static int scanHits = 0;
         public static int targetFPS = 60;
         public static int lowestFPScalc = 1000000;
         public static int lowestFPSgraph = 1000000;
-        //First calculations drop fps for some reason
-        public static int skipFirstBunchOfCalculations = 0;
-        public WriteableBitmap CurrentPgImage
+        public static BitmapSource currentPgImage = new WriteableBitmap(board, board, 96, 96, PixelFormats.Bgr32, null);
+        public BitmapSource CurrentPgImage
         {
             get { return currentPgImage; }
             set
             {
                 currentPgImage = value;
-                PropertyChanged?.Invoke(
-                    this, new PropertyChangedEventArgs("CurrentPgImage"));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("CurrentPgImage"));
             }
         }
-        //Other global variables
 
-        //Jagged array is faster than 2d array or a single array for my data size
-        //Did I properly init static array for a continious memory allocation?
         public static Dot[][] dots = InitDots();
         public static List<Dot> actorsList = new List<Dot>();
         public static List<Dot> actorsToRetainList = new List<Dot>();
-        [ThreadStatic]
-        public static Random random = new Random();
+        public static int eatenFood = 0;
 
+        public Random random = new Random();
 
+        //Make a dict with Point as key?
         public struct Dot
         {
-            public int playerID;
-            public int signal;
-            public int density;
-            public int type; //0 - worker, 1 - warrior, 10 - resource, 11 empty
-            //I need x and y despite them being equal to the indexes because I don't know how to store a Dot[][] in actorsList and knowing their index at the same time. Is there any better way?
-            public int x;
-            public int y;
+            public byte playerID;
+           // public byte density;
+            public byte type; //0 - worker, 1 - warrior, 10 - resource, 11 empty
+            public ushort x;
+            public ushort y;
         }
 
 
@@ -85,58 +79,72 @@ namespace petri
 
             Dot[][] result = new Dot[board][];
 
-            for (int x = 0; x < board; ++x)
+            for (ushort x = 0; x < board; ++x)
             {
                 result[x] = new Dot[board];
-                for (int y = 0; y < board; ++y)
+                for (ushort y = 0; y < board; ++y)
                 {
+                    result[x][y] = new Dot();
                     result[x][y].x = x;
                     result[x][y].y = y;
-                    if (x == 0 || x == board - 1 || y == 0 || y == board - 1)
-                        result[x][y].playerID = -1;
+                    if (x < 20 || x > board - 20 || y < 20 || y > board - 20)
+                        result[x][y].playerID = 255;
                     else
                         result[x][y].playerID = 0;
 
-
+                    imgdata[x * stride + y * 4 + 0] = 255;
+                    imgdata[x * stride + y * 4 + 1] = 255;
+                    imgdata[x * stride + y * 4 + 2] = 255;
+                    imgdata[x * stride + y * 4 + 3] = 255;
                 }
             }
             return result;
         }
 
 
+
         //Place random dots to start the game
         public void InitPlaceSpawn()
         {
 
-            int randomPosX;
-            int randomPosY;
-
-            for (var i = 0; i < 150; i++)
+            ushort randomPosX;
+            ushort randomPosY;
+            for (var i = 0; i < 20000; i++)
             {
-                randomPosX = random.Next(500, 800);
-                randomPosY = random.Next(500, 800);
+                randomPosX = (ushort)random.Next(50, 450);
+                randomPosY = (ushort)random.Next(50, 450);
 
                 if ((dots[randomPosX][randomPosY].playerID == 0))
                 {
-                    UpdateDotOwner(1, randomPosX, randomPosY, 10);
+                    UpdateDot(1, randomPosX, randomPosY, 0);
                     actorsList.Add(dots[randomPosX][randomPosY]);
                 }
             }
 
-            for (var i = 0; i < 150; i++)
+            for (var i = 0; i < 20000; i++)
             {
-                randomPosX = random.Next(200, 400);
-                randomPosY = random.Next(200, 400);
+                randomPosX = (ushort)random.Next(50, 450);
+                randomPosY = (ushort)random.Next(50, 450);
 
                 if ((dots[randomPosX][randomPosY].playerID == 0))
                 {
-                    UpdateDotOwner(2, randomPosX, randomPosY, 10);
+                    UpdateDot(2, randomPosX, randomPosY, 0);
                     actorsList.Add(dots[randomPosX][randomPosY]);
+                }
+            }
+            for (var i = 0; i < 1; i++)
+            {
+                randomPosX = (ushort)random.Next(30, 450);
+                randomPosY = (ushort)random.Next(30, 450);
+
+                if ((dots[randomPosX][randomPosY].playerID == 0))
+                {
+                    UpdateDot(100, randomPosX, randomPosY, 100);
                 }
             }
         }
 
-        public void UpdateDotOwner(int playerID, int x, int y, int type)
+        public void UpdateDot(byte playerID, ushort x, ushort y, byte type)
         {
             byte color;
             dots[x][y].type = type;
@@ -145,17 +153,24 @@ namespace petri
             {
                 color = 0x0000064;
                 imgdata[x * stride + y * 4 + 0] = color;
-                imgdata[x * stride + y * 4 + 1] = color;
-                imgdata[x * stride + y * 4 + 2] = color;
-                imgdata[x * stride + y * 4 + 3] = 0;
+                imgdata[x * stride + y * 4 + 1] = 0;
+                imgdata[x * stride + y * 4 + 2] = 0;
+                imgdata[x * stride + y * 4 + 3] = color;
             }
             else if (playerID == 2)
             {
                 color = 0x0000064;
-                imgdata[x * stride + y * 4 + 0] = color;
+                imgdata[x * stride + y * 4 + 0] = 0;
                 imgdata[x * stride + y * 4 + 1] = 0;
                 imgdata[x * stride + y * 4 + 2] = color;
                 imgdata[x * stride + y * 4 + 3] = color;
+            }
+            else if (playerID == 100)
+            {
+                imgdata[x * stride + y * 4 + 0] = 0;
+                imgdata[x * stride + y * 4 + 1] = 0;
+                imgdata[x * stride + y * 4 + 2] = 0;
+                imgdata[x * stride + y * 4 + 3] = 255;
             }
             else
             {
@@ -166,25 +181,131 @@ namespace petri
             }
         }
 
-
-        public List<Dot> ScanNeighbors(Dot actor)
+        public void EraseDot(ushort x, ushort y)
         {
-            List<Dot> decisionList = new List<Dot>();
-            for (int sector_x = actor.x - 1; sector_x != actor.x + 2; sector_x++)
-            {
-                for (int sector_y = actor.y - 1; sector_y != actor.y + 2; sector_y++)
-                {
-                    if (dots[sector_x][sector_y].type != 10 && dots[sector_x][sector_y].playerID != -1 && dots[sector_x][sector_y].playerID != 1 && dots[sector_x][sector_y].playerID != 2)
-                    {
-                        decisionList.Add(dots[sector_x][sector_y]);
-                    }
-                }
-            }
-            return decisionList;
+            dots[x][y].type = 0;
+            dots[x][y].playerID = 0;
+            imgdata[x * stride + y * 4 + 0] = 0;
+            imgdata[x * stride + y * 4 + 1] = 0;
+            imgdata[x * stride + y * 4 + 2] = 0;
+            imgdata[x * stride + y * 4 + 3] = 0;
+            
         }
 
 
 
+        public (List<Dot>, List<Dot>, List<Dot>, List<Dot>, List<Dot>, List<Dot>, List<Dot>, List<Dot>) ScanNeighbors(Dot actor)
+        {
+            //Moving this lists to static rises FPS from 6 to 9
+
+            List<Dot> neighborFoodList = new List<Dot>();
+            List<Dot> neighborEmptyList = new List<Dot>();
+            List<Dot> neighborFriendsList = new List<Dot>();
+            List<Dot> neighborEnemyList = new List<Dot>();
+
+            for (int sector_x = actor.x - 1; sector_x != actor.x + 2; sector_x++)
+            {
+                for (int sector_y = actor.y - 1; sector_y != actor.y + 2; sector_y++)
+                {
+                    if (sector_x == actor.x && sector_y == actor.y)
+                    {
+                        continue;
+                    }
+                    else if (dots[sector_x][sector_y].playerID == 255)
+                    {
+                        continue;
+                    }
+                    else if (dots[sector_x][sector_y].playerID == 100)
+                    {
+                        neighborFoodList.Add(dots[sector_x][sector_y]);
+                    }
+                    else if (dots[sector_x][sector_y].playerID == 0)
+                    {
+                        neighborEmptyList.Add(dots[sector_x][sector_y]);
+                    }
+                    else if (dots[sector_x][sector_y].playerID == actor.playerID)
+                    {
+                        neighborFriendsList.Add(dots[sector_x][sector_y]);
+                    }
+                    else if (dots[sector_x][sector_y].playerID != actor.playerID)
+                    {
+                        neighborEnemyList.Add(dots[sector_x][sector_y]);
+                    }
+                }
+            }
+
+            List<Dot> farNeighborFoodList = new List<Dot>();
+            List<Dot> farNeighborEmptyList = new List<Dot>();
+            List<Dot> farNeighborFriendsList = new List<Dot>();
+            List<Dot> farNeighborEnemyList = new List<Dot>();
+
+            for (int sector_x = actor.x - 3; sector_x != actor.x + 4; sector_x++)
+            {
+                for (int sector_y = actor.y - 3; sector_y != actor.y + 4; sector_y++)
+                {
+                    if (sector_x == actor.x && sector_y == actor.y)
+                    {
+                        continue;
+                    }
+                    if (sector_x == actor.x - 1 || sector_y == actor.y - 1 || sector_x == actor.x + 1 || sector_y == actor.y + 1)
+                    {
+                        continue;
+                    }
+                    else if (dots[sector_x][sector_y].playerID == 100)
+                    {
+                        farNeighborFoodList.Add(dots[sector_x][sector_y]);
+                    }
+                    else if (dots[sector_x][sector_y].playerID == 0)
+                    {
+                        farNeighborEmptyList.Add(dots[sector_x][sector_y]);
+                    }
+                    else if (dots[sector_x][sector_y].playerID == actor.playerID)
+                    {
+                        farNeighborFriendsList.Add(dots[sector_x][sector_y]);
+                    }
+                    else if (dots[sector_x][sector_y].playerID != actor.playerID)
+                    {
+                        farNeighborEnemyList.Add(dots[sector_x][sector_y]);
+                    }
+                }
+            }
+
+            return (neighborFoodList, neighborEmptyList, neighborFriendsList, neighborEnemyList, farNeighborFoodList, farNeighborEmptyList, farNeighborFriendsList, farNeighborEnemyList);
+        }
+
+
+        public List<Dot> GetCourse(Dot actor, List<Dot> targetList, List<Dot> neighborList)
+        {
+            //List<Dot> buffer = new List<Dot>();
+            //List<Dot> magnetList = new List<Dot>();
+            //Dot randomMagnet = new Dot();
+
+            List<Dot> possibleCourse = new List<Dot>();
+            byte rt = (byte)random.Next(targetList.Count);
+
+
+            foreach (Dot neighbor in neighborList)
+            {
+
+            
+            int deltaX = (int)(targetList[rt].x - actor.x);
+            int deltaY = (int)(targetList[rt].y - actor.y);
+
+            int magnetDeltaX = (int)(targetList[rt].x - neighbor.x);
+            int magentDeltaY = (int)(targetList[rt].y - neighbor.y);
+
+            int delta = (int)((deltaX * deltaX) + (deltaY * deltaY));
+            int magnetDelta = (int)((magnetDeltaX * magnetDeltaX) + (magentDeltaY * magentDeltaY));
+
+
+            if (magnetDelta < delta)
+            {
+                    possibleCourse.Add(neighbor);
+            }
+
+        }
+            return possibleCourse;
+        }
 
         public void Calc(object source, ElapsedEventArgs e)
         {
@@ -198,88 +319,111 @@ namespace petri
             try
             {
                 calcWatch.Start();
-
-                //Use nullable class instead of struct and this list?
-                //LinkedList?
-                //Dict?
-                                
-                var actor = actorsList.Count;
-
-                foreach(Dot a in actorsList)
-                //Parallel.ForEach(actorsList, a =>
+                List<Dot> targetList = new List<Dot>();
+                Dot target = new Dot();
+                target.x = 300;
+                target.y = 300;
+                targetList.Add(target);
+                foreach (Dot actor in actorsList)
                 {
-                        List<Dot> decisionList = ScanNeighbors(a);
-                        if (decisionList.Count != 0)
+
+                    //List<Dot> neighborList = ScanNeighbors(a);
+
+                   (List<Dot> neighborFoodList, List<Dot> neighborEmptyList, List<Dot> neighborFriendsList, List<Dot> neighborEnemyList, List<Dot> farNeighborFoodList, List<Dot> farNeighborEmptyList, List<Dot> farNeighborFriendsList, List<Dot> farNeighborEnemyList) = ScanNeighbors(actor);
+
+                    if (neighborFoodList.Count != 0 && neighborEmptyList.Count != 0)
+                    {
+                        byte r = (byte)random.Next(neighborFoodList.Count);
+                        UpdateDot(actor.playerID, actor.x, actor.y, actor.type);
+                        actorsToRetainList.Add(dots[actor.x][actor.y]);
+                        UpdateDot(actor.playerID, neighborFoodList[r].x, neighborFoodList[r].y, 0);
+                        actorsToRetainList.Add(dots[neighborFoodList[r].x][neighborFoodList[r].y]);
+                        eatenFood++;
+                    }
+                    //else if (neighborEmptyList.Count != 1 && neighborFoodList.Count != 0 && rnd < 5)
+                    //{
+                    //    byte r = (byte)random.Next(neighborEmptyList.Count);
+                    //    UpdateDot(actor.playerID, neighborEmptyList[r].x, neighborEmptyList[r].y, 0);
+                    //    actorsToRetainList.Add(dots[neighborEmptyList[r].x][neighborEmptyList[r].y]);
+                    //    EraseDot(actor.x, actor.y);
+                    //}
+                    //else if (neighborFriendsList.Count != 0 && neighborEnemyList.Count != 0 && neighborFriendsList.Count > neighborEnemyList.Count)
+                    //{
+                    //    byte r = (byte)random.Next(neighborEnemyList.Count);
+                    //    UpdateDot(0, neighborEnemyList[r].x, neighborEnemyList[r].y, 0);
+                    //    actorsToRetainList.Add(dots[actor.x][actor.y]);
+                    //}
+                    //else if (neighborFriendsList.Count != 0 && neighborEnemyList.Count != 0 && neighborFriendsList.Count < neighborEnemyList.Count)
+                    //{
+                    //    //This should not exist, there must be no self-harm actions. In previous rule, the dot must be marked dead and skipped the calcucations
+                    //    UpdateDot(0, actor.x, actor.y, 0);
+                    //}
+                    else if (neighborEmptyList.Count != 0 && neighborFoodList.Count == 0)
+                    {
+
+                        //we must know where dot concentration bigger (possibly by quardic spearation) and remove random from getcourse, possibly turn a list to a dot
+                        //when cell moves, it LOOKS at quadrant and can't change it's position then?
+                        List<Dot> courseList = GetCourse(actor, targetList, neighborEmptyList);
+                        if (courseList.Count > 0)
                         {
-                            Random rndDestination = new Random();
-                            int r = rndDestination.Next(decisionList.Count);
-
-                            if (a.type == 10)
-                            {
-                                actorsToRetainList.Add(dots[a.x][a.y]);
-
-                                UpdateDotOwner(a.playerID, decisionList[r].x, decisionList[r].y, 0);
-                                actorsToRetainList.Add(dots[decisionList[r].x][decisionList[r].y]);
-                            }
-                            else
-                            {
-                                UpdateDotOwner(a.playerID, decisionList[r].x, decisionList[r].y, 0);
-                                actorsToRetainList.Add(dots[decisionList[r].x][decisionList[r].y]);
-
-                                UpdateDotOwner(0, a.x, a.y, 0);
-
-                            }
+                            byte r = (byte)random.Next(courseList.Count);
+                            UpdateDot(actor.playerID, courseList[r].x, courseList[r].y, 0);
+                            actorsToRetainList.Add(dots[courseList[r].x][courseList[r].y]);
+                            EraseDot(actor.x, actor.y);
                         }
                         else
                         {
-                            //  keep immobilized dots alive for awhile
-                            actorsToRetainList.Add(dots[a.x][a.y]);
+                            byte r = (byte)random.Next(neighborEmptyList.Count);
+                            UpdateDot(actor.playerID, neighborEmptyList[r].x, neighborEmptyList[r].y, 0);
+                            actorsToRetainList.Add(dots[neighborEmptyList[r].x][neighborEmptyList[r].y]);
+                            EraseDot(actor.x, actor.y);
+                        }
 
-                        }                    
+                    }
+                    //else if (neighborEmptyList.Count != 0 && neighborFoodList.Count == 0)
+                    //{
+                    //    byte r = (byte)random.Next(neighborEmptyList.Count);
+                    //    UpdateDot(actor.playerID, neighborEmptyList[r].x, neighborEmptyList[r].y, 0);
+                    //    actorsToRetainList.Add(dots[neighborEmptyList[r].x][neighborEmptyList[r].y]);
+                    //    UpdateDot(0, actor.x, actor.y, 0);
+                    //}
+                    else
+                    {
+                        //  keep immobilized dots alive for awhile
+                        UpdateDot(actor.playerID, actor.x, actor.y, actor.type);
+                        actorsToRetainList.Add(dots[actor.x][actor.y]);
+                    }
+                    
                 }
 
-                cleanupWatch.Start();
                 actorsList.Clear();
                 actorsList.AddRange(actorsToRetainList);
                 actorsToRetainList.Clear();
-                cleanupWatch.Stop();
-                int cleanupFPS = Convert.ToInt32(1000 / cleanupWatch.Elapsed.TotalMilliseconds);
-                cleanupWatch.Reset();
-
-                MainWindow.main.cleanupFPS = cleanupFPS.ToString();
 
                 MainWindow.main.actors = actorsList.Count().ToString();
+                MainWindow.main.eatenFood = eatenFood.ToString();
 
                 calcWatch.Stop();
                 int calcFPS = Convert.ToInt32(1000 / calcWatch.Elapsed.TotalMilliseconds);
                 MainWindow.main.calcFPS = calcFPS.ToString();
                 calcWatch.Reset();
 
-                if (lowestFPScalc > calcFPS && skipFirstBunchOfCalculations > 50)
-                {
-                    lowestFPScalc = calcFPS;
-                MainWindow.main.lowestCalcFPS = calcFPS.ToString();
-            }
-
                 App.Current.Dispatcher.Invoke((Action)delegate
-                    {
-                        graphicsWatch.Start();
+                {
+                    graphicsWatch.Start();
 
 
-                        currentPgImage.WritePixels(new Int32Rect(0, 0, board, board), imgdata, stride, 0);
+                    var pgSource = BitmapSource.Create(board, board, 96, 96, PixelFormats.Bgra32, null, imgdata, stride);
+                    pgSource.Freeze();
+                    CurrentPgImage = pgSource;
 
-                        graphicsWatch.Stop();
-                        int graphicsFPS = Convert.ToInt32(1000 / graphicsWatch.Elapsed.TotalMilliseconds);
-                        MainWindow.main.graphicsFPS = (graphicsFPS).ToString(); 
-                        graphicsWatch.Reset();
+                    graphicsWatch.Stop();
+                    int graphicsFPS = Convert.ToInt32(1000 / graphicsWatch.Elapsed.TotalMilliseconds);
+                    MainWindow.main.graphicsFPS = (graphicsFPS).ToString();
+                    graphicsWatch.Reset();
 
-                        if (lowestFPSgraph > graphicsFPS & skipFirstBunchOfCalculations > 50)
-                        {
-                            lowestFPSgraph = graphicsFPS;
-                            MainWindow.main.lowestGraphicsFPS = graphicsFPS.ToString();
-                        }
-                    });
-                skipFirstBunchOfCalculations++;
+                });
+
             }
             finally
             {
@@ -316,36 +460,32 @@ namespace petri
             set { Dispatcher.Invoke(new Action(() => { actorsCounter.Content = value; })); }
         }
 
-        internal string lowestCalcFPS
+        internal string eatenFood
         {
-            get { return lowestCalcFPSCounter.Content.ToString(); }
-            set { Dispatcher.Invoke(new Action(() => { lowestCalcFPSCounter.Content = value; })); }
+            get { return eatenFoodCounter.Content.ToString(); }
+            set { Dispatcher.Invoke(new Action(() => { eatenFoodCounter.Content = value; })); }
         }
 
-        internal string lowestGraphicsFPS
+        internal string scans
         {
-            get { return lowestGraphicsFPSCounter.Content.ToString(); }
-            set { Dispatcher.Invoke(new Action(() => { lowestGraphicsFPSCounter.Content = value; })); }
-        }
-
-        internal string cleanupFPS
-        {
-            get { return cleanupCounter.Content.ToString(); }
-            set { Dispatcher.Invoke(new Action(() => { cleanupCounter.Content = value; })); }
+            get { return scannedTimesCounter.Content.ToString(); }
+            set { Dispatcher.Invoke(new Action(() => { scannedTimesCounter.Content = value; })); }
         }
 
 
         public MainWindow()
         {
             InitializeComponent();
+        
+        }
+
+        private void Start_Click(object sender, RoutedEventArgs e)
+        {
             main = this;
             var viewModel = new PgViewModel();
             DataContext = viewModel;
 
             viewModel.InitPlaceSpawn();
-
-
-
             System.Timers.Timer aTimer = new System.Timers.Timer();
             aTimer.Elapsed += new ElapsedEventHandler(viewModel.Calc);
             aTimer.Interval = Convert.ToInt32(1000 / targetFPS);
@@ -354,3 +494,4 @@ namespace petri
         }
     }
 }
+
