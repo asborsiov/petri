@@ -23,9 +23,12 @@
         <Label x:Name="actorsLabel" Content="№ of actors" HorizontalAlignment="Left" Margin="1210,70,0,0" VerticalAlignment="Top"/>
         <Label x:Name="eatenFoodCounter" Content="" HorizontalAlignment="Left" Margin="1300,85,0,0" VerticalAlignment="Top"/>
         <Label x:Name="eatenFoodLabel" Content="Food eaten" HorizontalAlignment="Left" Margin="1210,85,0,0" VerticalAlignment="Top"/>
-        <Label x:Name="scannedTimesCounter" Content="" HorizontalAlignment="Left" Margin="1300,100,0,0" VerticalAlignment="Top"/>
-        <Label x:Name="scannedTimesLabel" Content="Scans" HorizontalAlignment="Left" Margin="1210,100,0,0" VerticalAlignment="Top"/>
-        <Image x:Name="pg" Height="1000" Width="1000" Margin="10,10,242,0" VerticalAlignment="Top" Source="{Binding CurrentPgImage}"  RenderOptions.BitmapScalingMode="NearestNeighbor">
+        <Label x:Name="rulesNoHitCounter" Content="" HorizontalAlignment="Left" Margin="1404,20,0,0" VerticalAlignment="Top" RenderTransformOrigin="17.8,-2.733" Width="81"/>
+        <Label x:Name="rulesNoHitLabel" Content="Rules no hit" HorizontalAlignment="Left" Margin="1332,20,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.076,0.592"/>
+
+        <Image x:Name="pg" Height="1000" Width="1000" Margin="12,9,488,0" VerticalAlignment="Top" Source="{Binding CurrentPgImage}"  RenderOptions.BitmapScalingMode="NearestNeighbor">
+
+
             <Image.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform/>
@@ -34,9 +37,35 @@
                 </TransformGroup>
             </Image.RenderTransform>
         </Image>
+
         <Button x:Name="Start" Content="Start" HorizontalAlignment="Left" Margin="1214,153,0,0" VerticalAlignment="Top" Width="96" Click="Start_Click"/>
 
-
+        <Label x:Name="ScansLabel" Content="Scan depth" HorizontalAlignment="Left" Margin="1219,222,0,0" VerticalAlignment="Top" />
+        <ComboBox x:Name="ScanCtrl" HorizontalAlignment="Left" Margin="1305,224,0,0" VerticalAlignment="Top" Width="40" SelectedIndex="4">
+            <ComboBoxItem Content="1"/>
+            <ComboBoxItem Content="2"/>
+            <ComboBoxItem Content="3"/>
+            <ComboBoxItem Content="4"/>
+            <ComboBoxItem Content="5"/>
+            <ComboBoxItem Content="6"/>
+            <ComboBoxItem Content="7"/>
+            <ComboBoxItem Content="8"/>
+            <ComboBoxItem Content="9"/>
+        </ComboBox>
+        <Grid x:Name="RuleGrid" Margin="1010,253,-140,102"/>
+        <Button x:Name="AddRule" Content="Add a rule" HorizontalAlignment="Left" Margin="1214,183,0,0" VerticalAlignment="Top" Width="96" Click="AddRule_Click"/>
+        <Button x:Name="ManualStart" Content="Manual Start" HorizontalAlignment="Left" Margin="1214,126,0,0" VerticalAlignment="Top" Width="96" Click="ManualStart_Click"/>
+        <Button x:Name="NextStep" Content="Next step" HorizontalAlignment="Left" Margin="1320,126,0,0" VerticalAlignment="Top" Width="96" Click="NextStep_Click"/>
+        <ComboBox x:Name="DotActorList" HorizontalAlignment="Left" Margin="1057,18,0,0" VerticalAlignment="Top" Width="100" SelectionChanged="DotActorList_SelectionChanged" >
+        </ComboBox>
+        <ComboBox x:Name="NType" HorizontalAlignment="Left" Margin="1057,50,0,0" VerticalAlignment="Top" Width="100" SelectedIndex="0">
+            <ComboBoxItem Content="Vision"/>
+            <ComboBoxItem Content="Empty Close Neigh."/>
+            <ComboBoxItem Content="Empty Far Neigh."/>
+        </ComboBox>
+        <Button x:Name="Stop" Content="Stop\Resume" HorizontalAlignment="Left" Margin="1320,155,0,0" VerticalAlignment="Top" Width="96" Click="Stop_Click"/>
+        <Label x:Name="rotateHits" Content="" HorizontalAlignment="Left" Margin="1404,37,0,0" VerticalAlignment="Top"  Width="72"/>
+        <Label x:Name="Rotations" Content="Rotations" HorizontalAlignment="Left" Margin="1331,37,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.076,0.592"/>
 
     </Grid>
 </Window>
